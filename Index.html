@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Verification</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  body, html {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #0074ff;
+    transition: background 1s ease;
+    overflow: hidden;
+  }
+
+  .container {
+    text-align: center;
+    color: white;
+    padding: 20px;
+    max-width: 500px;
+    width: 90%;
+  }
+
+  .loading-text {
+    font-size: 22px;
+    margin-bottom: 40px;
+    animation: blink 1.2s infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  .round-loader {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 40px;
+  }
+
+  .round-line {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-top: 3px solid white;
+    animation: spin 1.5s linear infinite;
+  }
+
+  .round-line:nth-child(1) {
+    animation-delay: 0s;
+    border-top-color: rgba(255, 255, 255, 1);
+  }
+
+  .round-line:nth-child(2) {
+    animation-delay: 0.2s;
+    border-top-color: rgba(255, 255, 255, 0.8);
+    width: 90%;
+    height: 90%;
+    top: 5%;
+    left: 5%;
+  }
+
+  .round-line:nth-child(3) {
+    animation-delay: 0.4s;
+    border-top-color: rgba(255, 255, 255, 0.6);
+    width: 80%;
+    height: 80%;
+    top: 10%;
+    left: 10%;
+  }
+
+  .round-line:nth-child(4) {
+    animation-delay: 0.6s;
+    border-top-color: rgba(255, 255, 255, 0.4);
+    width: 70%;
+    height: 70%;
+    top: 15%;
+    left: 15%;
+  }
+
+  .round-line:nth-child(5) {
+    animation-delay: 0.8s;
+    border-top-color: rgba(255, 255, 255, 0.2);
+    width: 60%;
+    height: 60%;
+    top: 20%;
+    left: 20%;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .message {
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 25px;
+    line-height: 1.4;
+  }
+
+  .btn {
+    padding: 12px 35px;
+    font-size: 18px;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    color: white;
+    background: #00ff5a;
+    transition: 0.3s;
+    margin: 10px;
+  }
+
+  .btn:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+
+  .btn-red {
+    background: #ff3c3c;
+  }
+
+  .btn-orange {
+    background: #ff9500;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .developer-credit {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    font-size: 12px;
+    opacity: 0.7;
+    color: white;
+  }
+
+  .developer-credit a {
+    color: white;
+    text-decoration: none;
+  }
+
+  .developer-credit a:hover {
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="main">
+  <div class="loading-text">🔍 Verifying Your Device...</div>
+  
+  <div class="round-loader">
+    <div class="round-line"></div>
+    <div class="round-line"></div>
+    <div class="round-line"></div>
+    <div class="round-line"></div>
+    <div class="round-line"></div>
+  </div>
+</div>
+
+<div class="developer-credit">
+  Developer by <a href="https://t.me/txgimran" target="_blank">#Txg</a>
+</div>
+
+<script>
+// Get URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+const webhookUrl = urlParams.get('webhookUrl');
+const botId = urlParams.get('botId') || 'unknown';
+
+// Pre-generate fingerprint immediately
+const userHash = (function() {
+  const components = [
+    navigator.userAgent,
+    navigator.language,
+    screen.colorDepth,
+    screen.width + 'x' + screen.height,
+    new Date().getTimezoneOffset(),
+    !!navigator.javaEnabled(),
+    navigator.hardwareConcurrency || 'unknown'
+  ].join('|');
+  
+  let hash = 0;
+  for (let i = 0; i < components.length; i++) {
+    const char = components.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+})();
+
+// Pre-check same device immediately
+const isSameDevice = (function() {
+  const key = `verified_devices_${botId}`;
+  const existingDevices = JSON.parse(localStorage.getItem(key) || '[]');
+  const sameDevice = existingDevices.includes(userHash);
+  
+  if (!sameDevice) {
+    existingDevices.push(userHash);
+    localStorage.setItem(key, JSON.stringify(existingDevices));
+  }
+  
+  return sameDevice;
+})();
+
+// Fast VPN detection
+async function quickVPNDetection() {
+  // Only check most reliable indicators
+  return navigator.webdriver === true || 
+         /HeadlessChrome|PhantomJS/i.test(navigator.userAgent);
+}
+
+// Network monitoring (lightweight)
+let networkChanges = 0;
+window.addEventListener('online', () => networkChanges++);
+window.addEventListener('offline', () => networkChanges++);
+
+// Fast verification - only 2 seconds
+async function performFastVerification() {
+  // Wait only 2 seconds instead of 4
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  const isVPN = await quickVPNDetection();
+  const isBypass = networkChanges > 2;
+  
+  return {
+    user_hash: userHash,
+    captcha: "true",
+    vpn: isVPN.toString(),
+    is_same_device: isSameDevice,
+    is_bypass_attempt: isBypass
+  };
+}
+
+// Start FAST verification immediately
+setTimeout(async () => {
+  try {
+    const verificationData = await performFastVerification();
+    showResult(verificationData);
+  } catch (error) {
+    showError();
+  }
+}, 100); // Start almost immediately
+
+function showResult(data) {
+  const main = document.getElementById("main");
+  
+  let message = document.createElement("div");
+  message.className = "message";
+
+  let button = document.createElement("button");
+  button.className = "btn";
+
+  // Prepare result data
+  const resultData = {
+    results: {
+      user_hash: data.user_hash,
+      captcha: "true",
+      vpn: "false"
+    }
+  };
+
+  if (data.is_bypass_attempt) {
+    document.body.style.background = "red";
+    message.textContent = "🚫 Security Violation";
+    button.textContent = "Exit";
+    button.className = "btn btn-red";
+    button.onclick = () => {
+      resultData.results.captcha = "false";
+      resultData.results.vpn = "false";
+      sendResultInstant(resultData);
+    };
+  } else if (data.vpn === "true") {
+    document.body.style.background = "red";
+    message.textContent = "🚫 VPN Detected";
+    button.textContent = "Exit";
+    button.className = "btn btn-red";
+    button.onclick = () => {
+      resultData.results.captcha = "false";
+      resultData.results.vpn = "true";
+      sendResultInstant(resultData);
+    };
+  } else if (data.is_same_device) {
+    document.body.style.background = "orange";
+    message.textContent = "⚠️ Same Device";
+    button.textContent = "Continue";
+    button.className = "btn btn-orange";
+    button.onclick = () => {
+      resultData.results.captcha = "true";
+      resultData.results.vpn = "false";
+      sendResultInstant(resultData);
+    };
+  } else {
+    document.body.style.background = "green";
+    message.textContent = "✅ Verified";
+    button.textContent = "Continue";
+    button.onclick = () => {
+      resultData.results.captcha = "true";
+      resultData.results.vpn = "false";
+      sendResultInstant(resultData);
+    };
+  }
+
+  main.innerHTML = "";
+  main.appendChild(message);
+  main.appendChild(button);
+}
+
+// INSTANT response sending
+function sendResultInstant(data) {
+  console.log('Sending INSTANT response:', data);
+  
+  // Method 1: Telegram WebApp (fastest)
+  if (window.Telegram && window.Telegram.WebApp) {
+    try {
+      window.Telegram.WebApp.sendData(JSON.stringify(data));
+      setTimeout(() => window.Telegram.WebApp.close(), 100);
+      return;
+    } catch (error) {
+      console.log('Telegram failed, trying next method');
+    }
+  }
+  
+  // Method 2: Window opener (very fast)
+  if (window.opener && !window.opener.closed) {
+    try {
+      window.opener.postMessage(data, '*');
+      setTimeout(() => window.close(), 100);
+      return;
+    } catch (error) {
+      console.log('Window opener failed');
+    }
+  }
+  
+  // Method 3: Webhook with no waiting
+  if (webhookUrl) {
+    // Send but don't wait for response
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+      mode: 'no-cors' // Don't wait for CORS
+    }).catch(() => {}).finally(() => {
+      if (window.opener) setTimeout(() => window.close(), 100);
+    });
+  } else {
+    if (window.opener) setTimeout(() => window.close(), 100);
+  }
+}
+
+function showError() {
+  const main = document.getElementById("main");
+  document.body.style.background = "red";
+  
+  main.innerHTML = `
+    <div class="message">❌ Failed</div>
+    <button class="btn btn-red" onclick="window.location.reload()">Try Again</button>
+  `;
+}
+
+// Pre-initialize Telegram WebApp for faster response
+if (window.Telegram && window.Telegram.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+}
+
+// Send response immediately if page loads and same device is detected
+if (isSameDevice) {
+  setTimeout(() => {
+    const resultData = {
+      results: {
+        user_hash: userHash,
+        captcha: "true",
+        vpn: "false"
+      }
+    };
+    console.log('Same device detected instantly, sending response');
+    sendResultInstant(resultData);
+  }, 500);
+}
+</script>
+</body>
+</html>
